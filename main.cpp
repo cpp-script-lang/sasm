@@ -1,12 +1,20 @@
-|@Front-end@@@@@@@|
-------------------|
-|@@@CILR@@@@@@@@@@|
-|   CVM           |
-|###OLR#(bez#OOP)#|
-------------------|
-|#OLE#(OTHERLANG)#|
-|###Old-langs#####|
-
+/**
+* CVM:
+* |@Front-end@@@@@@@|
+* ------------------|
+* |@@@CILR@@@@@@@@@@|
+* |   CVM           |
+* |###OLR#(bez#OOP)#|
+* ------------------|
+* |#OLE#(OTHERLANG)#|
+* |###Old-langs#####|
+*/
+/**
+* @file main.cpp
+* @proj SASM
+* @brief Stack Assembly language
+* @date 28.04.2021
+*/
 #include<stack>
 #include<iostream>
 #include<fstream>
@@ -16,7 +24,7 @@
 
 enum class STATUS
 {
-    ARGUMENTSOVERFLOW = 3, ARGUMENTSUNDERFLOW = -3, DIVBYZERO = -1, ISNOTARRAY = 1, UNDECLAREDID = 2
+    ARGUMENTSOVERFLOW = 3, ARGUMENTSUNDERFLOW = -3, DIVBYZERO = -1, ISNOTARRAY = 1, UNDECLAREDID = 2, NOFILE = -2
 };
 /**
 * Naming:
@@ -36,7 +44,7 @@ enum class INSTR
     // Stack operations
     LOAD = 0x00 /* unary */, POP /* nullary */, POPX /* unary */,
     // Arithmetic operations
-    INC, DEC, NEGI, NEGF, ADDI, ADDF, SUBI, SUBF, RSUBI, RSUBF, MULI, MULF, DIV, RDIV, MOD, POW, RPOW, SQUARE, CUBE, DOUBLEI, DOUBLEF, TRIPLE, // nullary
+    INC, DEC, NEGI, NEGF, ADDI, ADDF, SUBI, SUBF, RSUBI, RSUBF, MULI, MULF, DIV, RDIV, MOD, POW, RPOW, SQUARE, CUBE, DOUBLEI, DOUBLEF, TRIPLEI, TRIPLEF // nullary
     // Bitwise operations
     ANDB, ORB, XORB, NANDB, NORB, NOTB,
     // Logical operations
@@ -81,7 +89,8 @@ switch(instr)
     case "CUBE": case "cube": return INSTR::CUBE;
     case "DOUBLEI": case "doublei": return INSTR::DOUBLEI;
     case "DOUBLEF": case "doublef": return INSTR::DOUBLEF;
-    case "TRIPLE": case "triple": return INSTR::TRIPLE;
+    case "TRIPLEI": case "triplei": return INSTR::TRIPLEI;
+    case "TRIPLEF": case "triplef": return INSTR::TRIPLEF; 
     case "ANDB": case "andb": return INSTR::ANDB;
     case "ORB": case "orb": return INSTR::ORB;
     case "XORB": case "xorb": return INSTR::XORB;
@@ -139,7 +148,7 @@ switch(instr)
     case "RLTE": case "rlte": return INSTR::RLTE;
     case "RLTEP": case "rltep": return INSTR::RLTEP;
     default:
-         return UndeclaredID(instruction[0]);
+         return UndeclaredID(instr);
     }
 }
 // is_array
@@ -259,6 +268,14 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
             if(instruction.size() > 1) return WrongArity(file_name, line_num, "doublef", 0, instruction.size() - 1);
             op1 = stack.top(); stack.pop(); stack.push(2. * std::any_cast<long double>(op1));
             break;
+        case INSTR::TRIPLEI:
+            if(instruction.size() > 1) return WrongArity(file_name, line_num, "triplei", 0, instruction.size() - 1);
+            op1 = stack.top(); stack.pop(); stack.push(3 * std::any_cast<long long>(op1));
+            break;
+        case INSTR::TRIPLEF:
+            if(instruction.size() > 1) return WrongArity(file_name, line_num, "triplef", 0, instruction.size() - 1);
+            op1 = stack.top(); stack.pop(); stack.push(3. * std::any_cast<long double>(op1));
+            break;
         case INSTR::DIV:
             if(instruction.size() > 1) return WrongArity(file_name, line_num, "div", 0, instruction.size() - 1);
             op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop();
@@ -288,8 +305,17 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
             break;
        case INSTR::CUBE:
             if(instruction.size() > 1) return WrongArity(file_name, line_num, 0, instruction.size() - 1);
-            stack.top() = std::pow(stack.top(), 3);
+            op1 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op1), 3));
             break;
+       case INSTR::ANDB:
+            if(instruction.size() > 1) return WrongArity(file_name, line_num, 0, instruction.size() - 1);
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<unsigned long long>(op1) & std::any_cast<unsigned long long>(op2));
+            break;
+       case INSTR::ORB:
+            if(instruction.size() > 1) returnWrongArity(file_name, line_num, 0, instruction.size() - 1);
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<unsigned long long>(op1) | std::any_cast<unsigned long long>(op2));
+            break;
+       // TODO: Bitwise operations and other operations
        case INSTR::PRINTI:
             if(instruction.size() > 1) return WrongArity(file_name, line_num, 0, instruction.size() - 1);
             std::cout << std::any_cast<int>(stack.top());
