@@ -33,4 +33,4 @@
 
 # Custom
 .vscode/
-!bin/*
+!bin/*/*
