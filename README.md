@@ -12,4 +12,5 @@ It is going to be a core of VOLR (Vegetating and Old Languages Runtime) in CVM (
 This project is licensed under GNU GPLv3 or higher.
 
 # Notes
-It would be nice, if you contact me via Discussions tab on GitHub or via e-mail that you are enjoying this simple language and what has to be improved (but this via Issues tab only).
+It would be nice, if you contact me via Discussions tab on GitHub or via e-mail if you are enjoying this simple language and what has to be improved (but this via Issues tab only).
+In Discussions tab there always is also a discussion about latest release.
