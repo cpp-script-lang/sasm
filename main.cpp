@@ -38,7 +38,10 @@ std::string op1{}, op2{}, op3{}, op4{};
 int aux_i{};
 std::stack<std::string> aux_dbg_stack{};
 std::string aux_dbg_elem{};
-
+bool printc_aux_b_operand_is_num{false};
+int printc_aux_i{};
+bool printpc_aux_b_operand_is_num{false};
+int printpc_aux_i{};
 enum class STATUS
 {
     UNRECOGNISEDARG = -390, ARGUMENTSOVERFLOW = 3, ARGUMENTSUNDERFLOW = -3, DIVBYZERO = -1, SUCCESS = 0, /*ISNOTARRAY = 1,*/ UNDECLAREDID = 2, NOFILE = -2, EMPTYSTACK = 390
@@ -71,7 +74,7 @@ enum class INSTR
     // Array operations
     IDXI, IDXC, IDXB, IDXF, // unary
     // I/O
-    PRINTI, PRINTC, PRINTB, PRINTF, PRINTPI, PRINTPC, PRINTPB, PRINTPF, PRINTX, SCANI, SCANC, SCANS, SCANF, // all except PRINTX nullary, but PRINTX unary
+    PRINTI, PRINTC, PRINTS, PRINTB, PRINTF, PRINTPI, PRINTPC, PRINTPS, PRINTPB, PRINTPF, PRINTX, SCANI, SCANC, SCANS, SCANF, // all except PRINTX nullary, but PRINTX unary
     // Miscellaneous
     RET, NOP, DBG, CONC, CLR, // nullary
     // Relational (ordering) operations
@@ -159,10 +162,12 @@ INSTR GetInstrFromString(const std::string& instr)
     else if(instr == "IDXF" || instr == "idxf") return INSTR::IDXF;
     else if(instr == "PRINTI" || instr == "printi") return INSTR::PRINTI;
     else if(instr == "PRINTC" || instr == "printc") return INSTR::PRINTC;
+    else if(instr == "PRINTS" || instr == "prints") return INSTR::PRINTS;
     else if(instr == "PRINTB" || instr == "printb") return INSTR::PRINTB;
     else if(instr == "PRINTF" || instr == "printf") return INSTR::PRINTF;
     else if(instr == "PRINTPI" || instr == "printpi") return INSTR::PRINTPI;
     else if(instr == "PRINTPC" || instr == "printpc") return INSTR::PRINTPC;
+    else if(instr == "PRINTPS" || instr == "printps") return INSTR::PRINTPS;
     else if(instr == "PRINTPB" || instr == "printpb") return INSTR::PRINTPB;
     else if(instr == "PRINTPF" || instr == "printpf") return INSTR::PRINTPF;
     else if(instr == "SCANI" || instr == "scani") return INSTR::SCANI;
@@ -369,6 +374,16 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
             break;
         case INSTR::PRINTC:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printc", 0, instruction.size() - 1);
+            try
+            {
+                printc_aux_i = std::stoi(stack.top());
+                printc_aux_b_operand_is_num = true;
+            }
+            catch(...){}
+            std::cout << (printc_aux_b_operand_is_num ? static_cast<char>(printc_aux_i) : stack.top()[0]);
+            break;
+        case INSTR::PRINTS:
+            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "prints", 0, instruction.size() - 1);
             std::cout << stack.top();
             break;
         case INSTR::PRINTPI:
@@ -377,6 +392,16 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
             break;
         case INSTR::PRINTPC:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printpc", 0, instruction.size() - 1);
+            try
+            {
+                printpc_aux_i = std::stoi(stack.top());
+                printpc_aux_b_operand_is_num = true;
+            }
+            catch(...){}
+            std::cout << (printpc_aux_b_operand_is_num ? static_cast<char>(printpc_aux_i) : stack.top()[0]); stack.pop();
+            break;
+        case INSTR::PRINTPS:
+            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printps", 0, instruction.size() - 1);
             std::cout << stack.top(); stack.pop();
             break;
         case INSTR::SCANI:

@@ -14,3 +14,6 @@ This project is licensed under GNU GPLv3 or higher.
 # Notes
 Feel free to contact me via Discussions tab on GitHub or via e-mail if you are enjoying this simple language and what has to be improved (but this via Issues tab only).
 In Discussions tab there always is also a discussion about latest release.
+
+# Known issues
+On GNU/Linux, `print*` commands doesn't work.

@@ -1,0 +1,6 @@
+load Hello
+printps
+load World!
+printps
+load 10
+printpc
