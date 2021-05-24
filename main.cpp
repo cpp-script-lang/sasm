@@ -19,21 +19,33 @@
 #include<iostream>
 #include<fstream>
 #include<any>
-#include<stack>
+#include<string>
 #include<type_traits>
 #include<vector>
+#include<ctime>
 #include<cmath>
+#include<sstream>
+#include<regex>
 
-std::stack<std::any> stack{};
+// std::stack<std::any> stack{};
+std::stack<std::string> stack{};
 std::string line{};
 std::string file_name{};
 std::size_t line_num = 0;
 std::vector<std::string> instruction{};
+enum class INSTR;
 INSTR mnemonic{};
-std::any op1{}, op2{}, op3{}, op4{};
+// std::any op1{}, op2{}, op3{}, op4{};
+std::string op1{}, op2{}, op3{}, op4{};
+int aux_i{};
+// std::stack<std::any> aux_dbg_stack{stack};
+std::stack<std::string> aux_dbg_stack{stack};
+// std::any aux_dbg_elem{};
+std::string aux_dbg_elem{};
+
 enum class STATUS
 {
-    UNRECOGNISEDARG = -390, ARGUMENTSOVERFLOW = 3, ARGUMENTSUNDERFLOW = -3, DIVBYZERO = -1, SUCCESS = 0, ISNOTARRAY = 1, UNDECLAREDID = 2, NOFILE = -2, EMPTYSTACK = 390
+    UNRECOGNISEDARG = -390, ARGUMENTSOVERFLOW = 3, ARGUMENTSUNDERFLOW = -3, DIVBYZERO = -1, SUCCESS = 0, /*ISNOTARRAY = 1,*/ UNDECLAREDID = 2, NOFILE = -2, EMPTYSTACK = 390
 };
 /**
 * Naming:
@@ -68,7 +80,7 @@ enum class INSTR
     RET, NOP, DBG, CONC, CLR, // nullary
     // Relational (ordering) operations
     EQ, EQP, GT, GTP, RGT, RGTP, GTE, GTEP, RGTE, RGTEP, LT, LTP, RLT, RLTP, LTE, LTEP, RLTE, RLTEP, // nullary
-    UNKNOWN_OPCODE
+    UNKNOWN_OPCODE, COMMENT
 };
 STATUS WrongArity(const std::string& file_name, const std::string& line, const std::size_t& line_num, const std::string& instr, const unsigned short& corr_args, const unsigned short& actual_args)
 {
@@ -94,12 +106,12 @@ STATUS DivisionByZero(const std::string& file_name, const std::string& line, con
     std::cerr << line << std::endl;
     return STATUS::DIVBYZERO;
 }
-STATUS OperandIsNotArray(const std::string& file_name, const std::string& line, const std::size_t& line_num, const std::string& instr, const std::any& operand)
-{
-    std::cerr << "In file " << file_name << ": line: " << line_num << ": error: Operand '" << std::any_cast<std::string>(operand) << "' of instruction '" << instr << "' used in array context is not an array!" << std::endl;
-    std::cerr << line << std::endl;
-    return STATUS::ISNOTARRAY;
-}
+// STATUS OperandIsNotArray(const std::string& file_name, const std::string& line, const std::size_t& line_num, const std::string& instr, const std::any& operand)
+// {
+//     std::cerr << "In file " << file_name << ": line: " << line_num << ": error: Operand '" << std::any_cast<std::string>(operand) << "' of instruction '" << instr << "' used in array context is not an array!" << std::endl;
+//     std::cerr << line << std::endl;
+//     return STATUS::ISNOTARRAY;
+// }
 INSTR GetInstrFromString(const std::string& instr)
 {
     if(instr == "LOAD" || instr == "load") return INSTR::LOAD;
@@ -184,6 +196,7 @@ INSTR GetInstrFromString(const std::string& instr)
     else if(instr == "LTEP" || instr == "ltep") return INSTR::LTEP;
     else if(instr == "RLTE" || instr == "rlte") return INSTR::RLTE;
     else if(instr == "RLTEP" || instr == "rltep") return INSTR::RLTEP;
+    else if(std::regex_match(instr, std::regex(R"(;.*?)"))) return INSTR::COMMENT;
     else return INSTR::UNKNOWN_OPCODE;
 }
 // is_array
@@ -203,10 +216,12 @@ struct is_array<T, std::void_t<decltype(std::declval<T>()[1])>> : std::true_type
 std::vector<std::string> Split(const std::string& str)
 {
     std::vector<std::string> words{};
-    for(auto i = 0; i < str.size(); i++)
+    std::istringstream ss(str);
+    std::string token;
+    while(std::getline(ss, token, ' '))
     {
-        if(str[i] == ',' || str[i] == ' ') continue;
-        words[i].push_back(str[i]);
+        token.erase(token.find_last_not_of(',') + 1);
+        words.push_back(token);
     }
     return words;
 }
@@ -214,154 +229,203 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
 {
     while(!file.eof())
     {
-        std::getline(const_cast<std::ifstream&>(file), line);
         line_num++;
+        std::getline(const_cast<std::ifstream&>(file), line);
+        std::cout << "\tInterpreting line: " << line << " with number: " << line_num << std::endl; // LOG
         instruction = Split(line);
+        std::cout << "\tMnemonic: " << (instruction[0][0] == ';' ? "COMMENT" : instruction[0]) << std::endl; // LOG
         mnemonic = GetInstrFromString(instruction[0]);
         switch(mnemonic)
         {
         case INSTR::LOAD:
             if(instruction.size() != 2) return WrongArity(file_name, line, line_num, "load", 1, instruction.size() - 1);
             stack.push(instruction[1]);
+            std::cout << "\t\tArg: " << instruction[1] << std::endl; // LOG
             break;
         case INSTR::POP:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "pop", 0, instruction.size() - 1);
             if(stack.empty()) return EmptyStack(file_name, line, line_num, "pop", stack.size());
             stack.pop();
+            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
             break;
         case INSTR::POPX:
             if(instruction.size() != 2) return WrongArity(file_name, line, line_num, "popx", 1, instruction.size() - 1);
             op1 = instruction[1];
-            for(auto i = 0; i < std::any_cast<decltype(i)>(op1); i++)
+            // for(auto i = 0; i < std::any_cast<decltype(i)>(op1); i++)
+            for(auto i = 0; i < std::stoi(op1); i++)
             {
                 if(stack.empty()) return EmptyStack(file_name, line, line_num, "popx", stack.size());
                 stack.pop();
             }
+            std::cout << "\t\tArg: " << instruction[1] << std::endl; // LOG
             break;
         case INSTR::INC:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "inc", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(++std::any_cast<long double&>(op1));
+            // op1 = stack.top(); stack.pop(); stack.push(++std::any_cast<long double&>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) + 1));
+            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
             break;
         case INSTR::DEC:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "dec", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(--std::any_cast<long double&>(op1));
+            // op1 = stack.top(); stack.pop(); stack.push(--std::any_cast<long double&>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) - 1));
+            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
             break;
         case INSTR::NEGI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "negi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(-std::any_cast<long long>(op1));
+            // op1 = stack.top(); stack.pop(); stack.push(-std::any_cast<long long>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(-std::stoi(op1)));
             break;
         case INSTR::NEGF:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "negf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(-std::any_cast<long double>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(-std::stof(op1)));
             break;
         case INSTR::ADDI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "addi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long long>(op1) + std::any_cast<long long>(op2));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long long>(op1) + std::any_cast<long long>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) + std::stoi(op2)));
             break;
         case INSTR::ADDF:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "addf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op1) + std::any_cast<long double>(op2));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op1) + std::any_cast<long double>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stof(op1) + std::stof(op2)));
             break;
         case INSTR::SUBI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "subi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long long>(op1) - std::any_cast<long long>(op2));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long long>(op1) - std::any_cast<long long>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) - std::stoi(op2)));
             break;
         case INSTR::SUBF:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "subf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op1) - std::any_cast<long double>(op2));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op1) - std::any_cast<long double>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stof(op1) - std::stof(op2)));
             break;
         case INSTR::RSUBI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rsubi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long long>(op2) - std::any_cast<long long>(op1));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long long>(op2) - std::any_cast<long long>(op1));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op2) - std::stoi(op1)));
             break;
         case INSTR::RSUBF:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rsubf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op2) - std::any_cast<long double>(op1));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op2) - std::any_cast<long double>(op1));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stof(op2) - std::stof(op1)));
             break;
         case INSTR::MULI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "muli", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long long>(op1) * std::any_cast<long long>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoll(op1) * std::stoll(op2)));
             break;
         case INSTR::MULF:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "mulf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op1) * std::any_cast<long double>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stold(op1) * std::stold(op2)));
             break;
         case INSTR::DOUBLEI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "doublei", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(2 * std::any_cast<long long>(op1));
+            // op1 = stack.top(); stack.pop(); stack.push(2 * std::any_cast<long long>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(2 * std::stoi(op1)));
             break;
         case INSTR::DOUBLEF:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "doublef", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(2. * std::any_cast<long double>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(2. * std::stof(op1)));
             break;
         case INSTR::TRIPLEI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "triplei", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(3 * std::any_cast<long long>(op1));
+            // op1 = stack.top(); stack.pop(); stack.push(3 * std::any_cast<long long>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(3 * std::stoi(op1)));
             break;
         case INSTR::TRIPLEF:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "triplef", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(3. * std::any_cast<long double>(op1));
+            // op1 = stack.top(); stack.pop(); stack.push(3. * std::any_cast<long double>(op1));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(3. * std::stold(op1)));
             break;
         case INSTR::DIV:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "div", 0, instruction.size() - 1);
             op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop();
-            if(std::any_cast<int>(op2) == 0)
+            // if(std::any_cast<int>(op2) == 0)
+            if(std::stoi(op2) == 0)
             {
                 stack.push(op2); stack.push(op1);
                 return DivisionByZero(file_name, line, line_num);
             }
-            stack.push(std::any_cast<long double>(op1) / std::any_cast<long double>(op2));
+            // stack.push(std::any_cast<long double>(op1) / std::any_cast<long double>(op2));
+            stack.push(std::to_string(std::stold(op1) / std::stold(op2)));
             break;
-       case INSTR::RDIV:
+        case INSTR::RDIV:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rdiv", 0, instruction.size() - 1);
-            if(std::any_cast<int>(stack.top()) == 0) return DivisionByZero(file_name, line, line_num);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op2) / std::any_cast<long double>(op1));
+            // if(std::any_cast<int>(stack.top()) == 0)
+            if(std::stoi(stack.top()) == 0)
+            {
+                return DivisionByZero(file_name, line, line_num);
+            }
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<long double>(op2) / std::any_cast<long double>(op1));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stold(op2) / std::stold(op1)));
             break;
-       case INSTR::POW:
+        case INSTR::POW:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "pow", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op1), std::any_cast<long double>(op2)));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op1), std::any_cast<long double>(op2)));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op1), std::stold(op2))));
             break;
-       case INSTR::RPOW:
+        case INSTR::RPOW:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rpow", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op2), std::any_cast<long double>(op1)));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op2), std::any_cast<long double>(op1)));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op2), std::stold(op1))));
             break;
-       case INSTR::SQUARE:
+        case INSTR::SQUARE:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "square", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op1), 2));
+            // op1 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op1), 2));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op1), 2)));
             break;
-       case INSTR::CUBE:
+        case INSTR::CUBE:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "cube", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op1), 3));
+            // op1 = stack.top(); stack.pop(); stack.push(std::pow(std::any_cast<long double>(op1), 3));
+            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op1), 3)));
             break;
-       case INSTR::ANDB:
+        case INSTR::ANDB:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "andb", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<unsigned long long>(op1) & std::any_cast<unsigned long long>(op2));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<unsigned long long>(op1) & std::any_cast<unsigned long long>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoull(op1) & std::stoull(op2)));
             break;
-       case INSTR::ORB:
+        case INSTR::ORB:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "orb", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<unsigned long long>(op1) | std::any_cast<unsigned long long>(op2));
+            // op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::any_cast<unsigned long long>(op1) | std::any_cast<unsigned long long>(op2));
+            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoull(op1) | std::stoull(op2)));
             break;
-       // TODO: Bitwise operations and other operations
-       case INSTR::PRINTI:
+        // TODO: Bitwise operations and other operations
+        case INSTR::PRINTI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printi", 0, instruction.size() - 1);
-            std::cout << std::any_cast<int>(stack.top());
+            // std::cout << std::any_cast<int>(stack.top());
+            std::cout << std::stoi(stack.top());
             break;
-       case INSTR::PRINTPI:
+        case INSTR::PRINTPI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printpi", 0, instruction.size() - 1);
-            std::cout << std::any_cast<int>(stack.top()); stack.pop();
+            // std::cout << std::any_cast<int>(stack.top()); stack.pop();
+            std::cout << std::stoi(stack.top()); stack.pop();
             break;
-       case INSTR::SCANI:
+        case INSTR::SCANI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "scani", 0, instruction.size() - 1);
-            int x{}; std::cin >> x; stack.top() = x;
+            std::cin >> aux_i; stack.push(std::to_string(aux_i));
             break;
-       case INSTR::IDXI:
-            if(instruction.size() > 2) return WrongArity(file_name, line, line_num, "idxi", 1, instruction.size() - 1);
-            if(!is_array<decltype(stack.top())>::value) return OperandIsNotArray(file_name, line, line_num, instruction[0], stack.top());
-            op1 = instruction[1]; stack.push(std::any_cast<std::vector<std::any>>(stack.top())[std::any_cast<std::size_t>(op1)]);
+    //    case INSTR::IDXI:
+    //         if(instruction.size() > 2) return WrongArity(file_name, line, line_num, "idxi", 1, instruction.size() - 1);
+    //         if(!is_array<decltype(stack.top())>::value) return OperandIsNotArray(file_name, line, line_num, instruction[0], stack.top());
+    //         op1 = instruction[1]; stack.push(std::any_cast<std::vector<std::any>>(stack.top())[std::any_cast<std::size_t>(op1)]);
+    //         break;
+        case INSTR::DBG:
+            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "dbg", 0, instruction.size() - 1);
+            for(auto i = 0; i < aux_dbg_stack.size(); i++)
+            {
+                aux_dbg_elem = aux_dbg_stack.top(); aux_dbg_stack.pop();
+                // std::cout << i << " | " << std::any_cast<std::string>(aux_dbg_elem) << " |" << std::endl;
+                std::cout << i << " | " << aux_dbg_elem << " |" << std::endl;
+            }
+            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
+            break;
+        case INSTR::COMMENT:
+            break;
        default:
             return UndeclaredID(file_name, line, line_num, instruction[0]);
        }
     }
+    return STATUS::SUCCESS;
 }
 STATUS help()
 {
@@ -375,6 +439,7 @@ OPTIONS
 }
 STATUS version()
 {
+    time_t t = time(0);
     std::cout << R"(SASM (Stack Assembly) language interpreter
 Version: 0.1.0-alpha
 Author: Antoni Kiedos
@@ -382,7 +447,7 @@ Issue tracker: https://github.com/cpp-script-lang/sasm/issues
 Contributing: https://github.com/cpp-script-lang/sasm/pulls
 License: GNU GPLv3 or higher
 --------------------------------------------------------------
-Copyright (C) Antoni Kiedos 2021 - )" << tm().tm_year << ", Poland" << std::endl;
+Copyright (C) Antoni Kiedos 2021 - )" << (*localtime(&t)).tm_year + 1900 << ", Poland" << std::endl;
     return STATUS::SUCCESS;
 }
 STATUS ExecuteCommand(const std::string& cmd)
@@ -393,15 +458,25 @@ STATUS ExecuteCommand(const std::string& cmd)
 }
 bool IsValidFile(const std::string& file_name)
 {
-    return file_name.substr(file_name.size() - 5, 5) == ".sasm";
+    bool file{};
+    try
+    {
+        file = file_name.substr(file_name.size() - 5) == ".sasm";
+    }
+    catch(...) { return false; }
+    return file;
 }
 int main(int argc, char** argv)
 {
     if(argc == 2)
     {
         file_name = argv[1];
-        std::ifstream infile(file_name);
-        if(IsValidFile(file_name)) return static_cast<int>(interpret(infile, file_name));
+        if(IsValidFile(file_name))
+        {
+            std::ifstream infile(file_name);
+            std::cout << "Interpreting file: " << file_name << std::endl; // LOG
+            return static_cast<int>(interpret(infile, file_name));
+        }
         else return static_cast<int>(ExecuteCommand(file_name));
     }
     else if(argc > 2)
