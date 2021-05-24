@@ -79,7 +79,7 @@ enum class INSTR
     RET, NOP, DBG, CONC, CLR, // nullary
     // Relational (ordering) operations
     EQ, EQP, GT, GTP, RGT, RGTP, GTE, GTEP, RGTE, RGTEP, LT, LTP, RLT, RLTP, LTE, LTEP, RLTE, RLTEP, // nullary
-    UNKNOWN_OPCODE, COMMENT
+    UNKNOWN_OPCODE, COMMENT, EMPTYLINE
 };
 STATUS WrongArity(const std::string& file_name, const std::string& line, const std::size_t& line_num, const std::string& instr, const unsigned short& corr_args, const unsigned short& actual_args)
 {
@@ -198,6 +198,7 @@ INSTR GetInstrFromString(const std::string& instr)
     else if(instr == "RLTE" || instr == "rlte") return INSTR::RLTE;
     else if(instr == "RLTEP" || instr == "rltep") return INSTR::RLTEP;
     else if(std::regex_match(instr, std::regex(R"(;.*?)"))) return INSTR::COMMENT;
+    else if(instr == "") return INSTR::EMPTYLINE;
     else return INSTR::UNKNOWN_OPCODE;
 }
 // is_array
@@ -216,6 +217,7 @@ struct is_array<T, std::void_t<decltype(std::declval<T>()[1])>> : std::true_type
 
 std::vector<std::string> Split(const std::string& str)
 {
+    if(str == "") return {""};
     std::vector<std::string> words{};
     std::istringstream ss(str);
     std::string token;
@@ -232,22 +234,21 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
     {
         line_num++;
         std::getline(const_cast<std::ifstream&>(file), line);
-        //std::cout << "\tInterpreting line: " << line << " with number: " << line_num << std::endl; // LOG
+        if(line != "")std::cout << "\tInterpreting line: '" << line << "' with number: " << line_num << std::endl; // LOG
         instruction = Split(line);
-        //std::cout << "\tMnemonic: " << (instruction[0][0] == ';' ? "COMMENT" : instruction[0]) << std::endl; // LOG
+        if(line != "") std::cout << "\t\tMnemonic: " << (instruction[0][0] == ';' ? "COMMENT" : instruction[0]) << std::endl; // LOG
         mnemonic = GetInstrFromString(instruction[0]);
         switch(mnemonic)
         {
         case INSTR::LOAD:
             if(instruction.size() != 2) return WrongArity(file_name, line, line_num, "load", 1, instruction.size() - 1);
             stack.push(instruction[1]);
-            //std::cout << "\t\tArg: " << instruction[1] << std::endl; // LOG
+            std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
             break;
         case INSTR::POP:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "pop", 0, instruction.size() - 1);
             if(stack.empty()) return EmptyStack(file_name, line, line_num, "pop", stack.size());
             stack.pop();
-            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
             break;
         case INSTR::POPX:
             if(instruction.size() != 2) return WrongArity(file_name, line, line_num, "popx", 1, instruction.size() - 1);
@@ -257,17 +258,15 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
                 if(stack.empty()) return EmptyStack(file_name, line, line_num, "popx", stack.size());
                 stack.pop();
             }
-            //std::cout << "\t\tArg: " << instruction[1] << std::endl; // LOG
+            std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
             break;
         case INSTR::INC:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "inc", 0, instruction.size() - 1);
             op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) + 1));
-            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
             break;
         case INSTR::DEC:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "dec", 0, instruction.size() - 1);
             op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) - 1));
-            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
             break;
         case INSTR::NEGI:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "negi", 0, instruction.size() - 1);
@@ -421,10 +420,11 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
                 aux_dbg_elem = aux_dbg_stack.top(); aux_dbg_stack.pop();
                 std::cout << i << " | " << aux_dbg_elem << " |" << std::endl;
             }
-            // std::clog << "\t\tLine: " << line_num << "; mnemonic: " << instruction[0] << std::endl; // LOG
             break;
         case INSTR::COMMENT:
-            break;
+            continue;
+        case INSTR::EMPTYLINE:
+            continue;
        default:
             return UndeclaredID(file_name, line, line_num, instruction[0]);
        }
@@ -445,7 +445,7 @@ STATUS version()
 {
     time_t t = time(0);
     std::cout << R"(SASM (Stack Assembly) language interpreter
-Version: 0.1.0-alpha+noverbose
+Version: 0.1.0-beta+test
 Author: Antoni Kiedos
 Issue tracker: https://github.com/cpp-script-lang/sasm/issues
 Contributing: https://github.com/cpp-script-lang/sasm/pulls
