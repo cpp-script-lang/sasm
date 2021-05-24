@@ -88,6 +88,18 @@ STATUS EmptyStack(const std::string& file_name, const std::string& line, const s
     std::cerr << line << std::endl;
     return STATUS::EMPTYSTACK;
 }
+STATUS DivisionByZero(const std::string& file_name, const std::string& line, const std::size_t& line_num)
+{
+    std::cerr << "In file " << file_name << ": line: " << line_num << ": error: Division by 0!" << std::endl;
+    std::cerr << line << std::endl;
+    return STATUS::DIVBYZERO;
+}
+STATUS OperandIsNotArray(const std::string& file_name, const std::string& line, const std::size_t& line_num, const std::string& instr, const std::any& operand)
+{
+    std::cerr << "In file " << file_name << ": line: " << line_num << ": error: Operand '" << std::any_cast<std::string>(operand) << "' of instruction '" << instr << "' used in array context is not an array!" << std::endl;
+    std::cerr << line << std::endl;
+    return STATUS::ISNOTARRAY;
+}
 INSTR GetInstrFromString(const std::string& instr)
 {
     if(instr == "LOAD" || instr == "load") return INSTR::LOAD;
@@ -344,7 +356,7 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
             break;
        case INSTR::IDXI:
             if(instruction.size() > 2) return WrongArity(file_name, line, line_num, "idxi", 1, instruction.size() - 1);
-            if(!is_array<decltype(stack.top())>::value) return OperandIsNotArray(file_name, line, line_num, stack.top());
+            if(!is_array<decltype(stack.top())>::value) return OperandIsNotArray(file_name, line, line_num, instruction[0], stack.top());
             op1 = instruction[1]; stack.push(std::any_cast<std::vector<std::any>>(stack.top())[std::any_cast<std::size_t>(op1)]);
        default:
             return UndeclaredID(file_name, line, line_num, instruction[0]);
