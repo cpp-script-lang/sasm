@@ -234,16 +234,16 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
     {
         line_num++;
         std::getline(const_cast<std::ifstream&>(file), line);
-        if(line != "")std::cout << "\tInterpreting line: '" << line << "' with number: " << line_num << std::endl; // LOG
+        // if(line != "")std::cout << "\tInterpreting line: '" << line << "' with number: " << line_num << std::endl; // LOG
         instruction = Split(line);
-        if(line != "") std::cout << "\t\tMnemonic: " << (instruction[0][0] == ';' ? "COMMENT" : instruction[0]) << std::endl; // LOG
+        // if(line != "") std::cout << "\t\tMnemonic: " << (instruction[0][0] == ';' ? "COMMENT" : instruction[0]) << std::endl; // LOG
         mnemonic = GetInstrFromString(instruction[0]);
         switch(mnemonic)
         {
         case INSTR::LOAD:
             if(instruction.size() != 2) return WrongArity(file_name, line, line_num, "load", 1, instruction.size() - 1);
             stack.push(instruction[1]);
-            std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
+            // std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
             break;
         case INSTR::POP:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "pop", 0, instruction.size() - 1);
@@ -258,7 +258,7 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
                 if(stack.empty()) return EmptyStack(file_name, line, line_num, "popx", stack.size());
                 stack.pop();
             }
-            std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
+            // std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
             break;
         case INSTR::INC:
             if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "inc", 0, instruction.size() - 1);
