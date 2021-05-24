@@ -1,5 +1,9 @@
 ; Example adding 5 and 5 eventually displaying stack
 load 4
+printi
+load 10
+printc
+load 4
 inc
 load 5
 addi
