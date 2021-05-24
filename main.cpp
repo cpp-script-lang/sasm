@@ -441,7 +441,7 @@ STATUS version()
 {
     time_t t = time(0);
     std::cout << R"(SASM (Stack Assembly) language interpreter
-Version: 0.1.0-alpha
+Version: 0.1.0-alpha+test
 Author: Antoni Kiedos
 Issue tracker: https://github.com/cpp-script-lang/sasm/issues
 Contributing: https://github.com/cpp-script-lang/sasm/pulls
