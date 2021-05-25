@@ -105,12 +105,16 @@ STATUS DivisionByZero(const std::string& file_name, const std::string& line, con
     std::cerr << line << std::endl;
     return STATUS::DIVBYZERO;
 }
+
+// DO NOT TOUCH!!!
+/*
 // STATUS OperandIsNotArray(const std::string& file_name, const std::string& line, const std::size_t& line_num, const std::string& instr, const std::any& operand)
 // {
 //     std::cerr << "In file " << file_name << ": line: " << line_num << ": error: Operand '" << std::any_cast<std::string>(operand) << "' of instruction '" << instr << "' used in array context is not an array!" << std::endl;
 //     std::cerr << line << std::endl;
 //     return STATUS::ISNOTARRAY;
 // }
+*/
 INSTR GetInstrFromString(const std::string& instr)
 {
     if(instr == "LOAD" || instr == "load") return INSTR::LOAD;
