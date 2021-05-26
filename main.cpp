@@ -26,25 +26,40 @@
 #include<cmath>
 #include<sstream>
 #include<regex>
+//#include<tabulate/table.hpp>
 
-std::stack<std::string> stack{};
-std::string line{};
-std::string file_name{};
-std::size_t line_num = 0;
-std::vector<std::string> instruction{};
+std::stack<std::string> global_stack{};
+std::string global_line{};
+std::string global_file_name{};
+std::size_t global_line_num = 0;
+std::vector<std::string> global_instruction{};
 enum class INSTR;
-INSTR mnemonic{};
-std::string op1{}, op2{}, op3{}, op4{};
-int aux_i{};
-std::stack<std::string> aux_dbg_stack{};
-std::string aux_dbg_elem{};
-bool printc_aux_b_operand_is_num{false};
-int printc_aux_i{};
-bool printpc_aux_b_operand_is_num{false};
-int printpc_aux_i{};
+INSTR global_mnemonic{};
+std::string global_op1{}, global_op2{}, global_op3{}, global_op4{};
+int global_aux_i{};
+std::stack<std::string> global_aux_dbg_stack{};
+std::string global_aux_dbg_elem{};
+bool global_printc_aux_b_operand_is_num{false};
+int global_printc_aux_i{};
+bool global_printpc_aux_b_operand_is_num{false};
+int global_printpc_aux_i{};
 enum class STATUS
 {
     UNRECOGNISEDARG = -390, ARGUMENTSOVERFLOW = 3, ARGUMENTSUNDERFLOW = -3, DIVBYZERO = -1, SUCCESS = 0, /*ISNOTARRAY = 1,*/ UNDECLAREDID = 2, NOFILE = -2, EMPTYSTACK = 390
+};
+struct Options
+{
+    bool verbose;
+    bool log;
+    std::optional<std::ofstream> log_file;
+    explicit Options(const bool& verbose = false, const bool& log = false, const std::string& log_file = std::string())
+    {
+        this->verbose = verbose;
+        this->log = log;
+        if(log && !log_file.empty()) this->log_file->open(log_file);
+        else if(log) this->log_file->open("sasm_log.log");
+        else this->log_file = std::nullopt;
+    }
 };
 /**
 * Naming:
@@ -54,7 +69,8 @@ enum class STATUS
 * <name>L = logical
 * R<name> = do <name>, but with reversed operands
 * <name>I = do <name> with operands of type integer
-* <name>C = do <name> with operands of type char or char[]
+* <name>C = do <name> with operands of type char
+* <name>S = do <name> with operands of type string
 * <name>B = do <name> with operands of type bool
 * <name>F = do <name> with operands of type with floating point
 * <name>S = do <name> with operands of type string
@@ -202,7 +218,7 @@ INSTR GetInstrFromString(const std::string& instr)
     else if(instr == "RLTE" || instr == "rlte") return INSTR::RLTE;
     else if(instr == "RLTEP" || instr == "rltep") return INSTR::RLTEP;
     else if(std::regex_match(instr, std::regex(R"(;.*?)"))) return INSTR::COMMENT;
-    else if(instr == "") return INSTR::EMPTYLINE;
+    else if(instr.empty()) return INSTR::EMPTYLINE;
     else return INSTR::UNKNOWN_OPCODE;
 }
 // is_array
@@ -221,7 +237,7 @@ struct is_array<T, std::void_t<decltype(std::declval<T>()[1])>> : std::true_type
 
 std::vector<std::string> Split(const std::string& str)
 {
-    if(str == "") return {""};
+    if(str.empty()) return {""};
     std::vector<std::string> words{};
     std::istringstream ss(str);
     std::string token;
@@ -234,182 +250,200 @@ std::vector<std::string> Split(const std::string& str)
 }
 STATUS interpret(const std::ifstream& file, const std::string& file_name, const std::vector<std::string>& argv = {})
 {
+    Options opts;
+    if(!argv.empty()) if(argv[1] == "-v" || argv[1] == "--verbose") opts = Options(true);
+    if(opts.verbose)
+    {
+        std::cout << "Interpreting file: " << file_name << std::endl; // LOG
+    }
     while(!file.eof())
     {
-        line_num++;
-        std::getline(const_cast<std::ifstream&>(file), line);
-        // if(line != "")std::cout << "\tInterpreting line: '" << line << "' with number: " << line_num << std::endl; // LOG
-        instruction = Split(line);
-        // if(line != "") std::cout << "\t\tMnemonic: " << (instruction[0][0] == ';' ? "COMMENT" : instruction[0]) << std::endl; // LOG
-        mnemonic = GetInstrFromString(instruction[0]);
-        switch(mnemonic)
+        global_line_num++;
+        std::getline(const_cast<std::ifstream&>(file), global_line);
+        if(opts.verbose)
+        {
+            if(!global_line.empty()) std::cout << "\tInterpreting line: '" << global_line << "' with number: " << global_line_num << std::endl; // LOG
+        }
+        global_instruction = Split(global_line);
+        if(opts.verbose)
+        {
+            if(!global_line.empty()) std::cout << "\t\tMnemonic: " << (global_instruction[0][0] == ';' ? "COMMENT" : global_instruction[0]) << std::endl; // LOG
+        }
+        global_mnemonic = GetInstrFromString(global_instruction[0]);
+        switch(global_mnemonic)
         {
         case INSTR::LOAD:
-            if(instruction.size() != 2) return WrongArity(file_name, line, line_num, "load", 1, instruction.size() - 1);
-            stack.push(instruction[1]);
-            // std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
+            if(global_instruction.size() != 2) return WrongArity(file_name, global_line, global_line_num, "load", 1, global_instruction.size() - 1);
+            global_stack.push(global_instruction[1]);
+            if(opts.verbose)
+            {
+                std::cout << "\t\t\tArg: " << global_instruction[1] << std::endl; // LOG
+            }
             break;
         case INSTR::POP:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "pop", 0, instruction.size() - 1);
-            if(stack.empty()) return EmptyStack(file_name, line, line_num, "pop", stack.size());
-            stack.pop();
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "pop", 0, global_instruction.size() - 1);
+            if(global_stack.empty()) return EmptyStack(file_name, global_line, global_line_num, "pop", global_stack.size());
+            global_stack.pop();
             break;
         case INSTR::POPX:
-            if(instruction.size() != 2) return WrongArity(file_name, line, line_num, "popx", 1, instruction.size() - 1);
-            op1 = instruction[1];
-            for(auto i = 0; i < std::stoi(op1); i++)
+            if(global_instruction.size() != 2) return WrongArity(file_name, global_line, global_line_num, "popx", 1, global_instruction.size() - 1);
+            global_op1 = global_instruction[1];
+            for(auto i = 0; i < std::stoi(global_op1); i++)
             {
-                if(stack.empty()) return EmptyStack(file_name, line, line_num, "popx", stack.size());
-                stack.pop();
+                if(global_stack.empty()) return EmptyStack(file_name, global_line, global_line_num, "popx", global_stack.size());
+                global_stack.pop();
             }
-            // std::cout << "\t\t\tArg: " << instruction[1] << std::endl; // LOG
+            if(opts.verbose)
+            {
+                std::cout << "\t\t\tArg: " << global_instruction[1] << std::endl; // LOG
+            }
             break;
         case INSTR::INC:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "inc", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) + 1));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "inc", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoi(global_op1) + 1));
             break;
         case INSTR::DEC:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "dec", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) - 1));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "dec", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoi(global_op1) - 1));
             break;
         case INSTR::NEGI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "negi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(-std::stoi(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "negi", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(-std::stoi(global_op1)));
             break;
         case INSTR::NEGF:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "negf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(-std::stof(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "negf", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(-std::stof(global_op1)));
             break;
         case INSTR::ADDI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "addi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) + std::stoi(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "addi", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoi(global_op1) + std::stoi(global_op2)));
             break;
         case INSTR::ADDF:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "addf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stof(op1) + std::stof(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "addf", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stof(global_op1) + std::stof(global_op2)));
             break;
         case INSTR::SUBI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "subi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op1) - std::stoi(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "subi", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoi(global_op1) - std::stoi(global_op2)));
             break;
         case INSTR::SUBF:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "subf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stof(op1) - std::stof(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "subf", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stof(global_op1) - std::stof(global_op2)));
             break;
         case INSTR::RSUBI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rsubi", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoi(op2) - std::stoi(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "rsubi", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoi(global_op2) - std::stoi(global_op1)));
             break;
         case INSTR::RSUBF:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rsubf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stof(op2) - std::stof(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "rsubf", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stof(global_op2) - std::stof(global_op1)));
             break;
         case INSTR::MULI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "muli", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoll(op1) * std::stoll(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "muli", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoll(global_op1) * std::stoll(global_op2)));
             break;
         case INSTR::MULF:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "mulf", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stold(op1) * std::stold(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "mulf", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stold(global_op1) * std::stold(global_op2)));
             break;
         case INSTR::DOUBLEI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "doublei", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(2 * std::stoi(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "doublei", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(2 * std::stoi(global_op1)));
             break;
         case INSTR::DOUBLEF:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "doublef", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(2. * std::stof(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "doublef", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(2. * std::stof(global_op1)));
             break;
         case INSTR::TRIPLEI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "triplei", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(3 * std::stoi(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "triplei", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(3 * std::stoi(global_op1)));
             break;
         case INSTR::TRIPLEF:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "triplef", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(3. * std::stold(op1)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "triplef", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(3. * std::stold(global_op1)));
             break;
         case INSTR::DIV:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "div", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop();
-            if(std::stoi(op2) == 0)
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "div", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop();
+            if(std::stoi(global_op2) == 0)
             {
-                stack.push(op2); stack.push(op1);
-                return DivisionByZero(file_name, line, line_num);
+                global_stack.push(global_op2); global_stack.push(global_op1);
+                return DivisionByZero(file_name, global_line, global_line_num);
             }
-            stack.push(std::to_string(std::stold(op1) / std::stold(op2)));
+            global_stack.push(std::to_string(std::stold(global_op1) / std::stold(global_op2)));
             break;
         case INSTR::RDIV:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rdiv", 0, instruction.size() - 1);
-            if(std::stoi(stack.top()) == 0)
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "rdiv", 0, global_instruction.size() - 1);
+            if(std::stoi(global_stack.top()) == 0)
             {
-                return DivisionByZero(file_name, line, line_num);
+                return DivisionByZero(file_name, global_line, global_line_num);
             }
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stold(op2) / std::stold(op1)));
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stold(global_op2) / std::stold(global_op1)));
             break;
         case INSTR::POW:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "pow", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op1), std::stold(op2))));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "pow", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::pow(std::stold(global_op1), std::stold(global_op2))));
             break;
         case INSTR::RPOW:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "rpow", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op2), std::stold(op1))));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "rpow", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::pow(std::stold(global_op2), std::stold(global_op1))));
             break;
         case INSTR::SQUARE:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "square", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op1), 2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "square", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::pow(std::stold(global_op1), 2)));
             break;
         case INSTR::CUBE:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "cube", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); stack.push(std::to_string(std::pow(std::stold(op1), 3)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "cube", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::pow(std::stold(global_op1), 3)));
             break;
         case INSTR::ANDB:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "andb", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoull(op1) & std::stoull(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "andb", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoull(global_op1) & std::stoull(global_op2)));
             break;
         case INSTR::ORB:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "orb", 0, instruction.size() - 1);
-            op1 = stack.top(); stack.pop(); op2 = stack.top(); stack.pop(); stack.push(std::to_string(std::stoull(op1) | std::stoull(op2)));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "orb", 0, global_instruction.size() - 1);
+            global_op1 = global_stack.top(); global_stack.pop(); global_op2 = global_stack.top(); global_stack.pop(); global_stack.push(std::to_string(std::stoull(global_op1) | std::stoull(global_op2)));
             break;
         // TODO: Bitwise operations and other operations
         case INSTR::PRINTI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printi", 0, instruction.size() - 1);
-            std::cout << std::stoi(stack.top());
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "printi", 0, global_instruction.size() - 1);
+            std::cout << std::stoi(global_stack.top());
             break;
         case INSTR::PRINTC:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printc", 0, instruction.size() - 1);
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "printc", 0, global_instruction.size() - 1);
             try
             {
-                printc_aux_i = std::stoi(stack.top());
-                printc_aux_b_operand_is_num = true;
+                global_printc_aux_i = std::stoi(global_stack.top());
+                global_printc_aux_b_operand_is_num = true;
             }
             catch(...){}
-            std::cout << (printc_aux_b_operand_is_num ? static_cast<char>(printc_aux_i) : stack.top()[0]);
+            std::cout << (global_printc_aux_b_operand_is_num ? static_cast<char>(global_printc_aux_i) : global_stack.top()[0]);
             break;
         case INSTR::PRINTS:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "prints", 0, instruction.size() - 1);
-            std::cout << stack.top();
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "prints", 0, global_instruction.size() - 1);
+            std::cout << global_stack.top();
             break;
         case INSTR::PRINTPI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printpi", 0, instruction.size() - 1);
-            std::cout << std::stoi(stack.top()); stack.pop();
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "printpi", 0, global_instruction.size() - 1);
+            std::cout << std::stoi(global_stack.top()); global_stack.pop();
             break;
         case INSTR::PRINTPC:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printpc", 0, instruction.size() - 1);
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "printpc", 0, global_instruction.size() - 1);
             try
             {
-                printpc_aux_i = std::stoi(stack.top());
-                printpc_aux_b_operand_is_num = true;
+                global_printpc_aux_i = std::stoi(global_stack.top());
+                global_printpc_aux_b_operand_is_num = true;
             }
             catch(...){}
-            std::cout << (printpc_aux_b_operand_is_num ? static_cast<char>(printpc_aux_i) : stack.top()[0]); stack.pop();
+            std::cout << (global_printpc_aux_b_operand_is_num ? static_cast<char>(global_printpc_aux_i) : global_stack.top()[0]); global_stack.pop();
             break;
         case INSTR::PRINTPS:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "printps", 0, instruction.size() - 1);
-            std::cout << stack.top(); stack.pop();
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "printps", 0, global_instruction.size() - 1);
+            std::cout << global_stack.top(); global_stack.pop();
             break;
         case INSTR::SCANI:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "scani", 0, instruction.size() - 1);
-            std::cin >> aux_i; stack.push(std::to_string(aux_i));
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "scani", 0, global_instruction.size() - 1);
+            std::cin >> global_aux_i; global_stack.push(std::to_string(global_aux_i));
             break;
     //    case INSTR::IDXI:
     //         if(instruction.size() > 2) return WrongArity(file_name, line, line_num, "idxi", 1, instruction.size() - 1);
@@ -417,12 +451,12 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
     //         op1 = instruction[1]; stack.push(std::any_cast<std::vector<std::any>>(stack.top())[std::any_cast<std::size_t>(op1)]);
     //         break;
         case INSTR::DBG:
-            if(instruction.size() > 1) return WrongArity(file_name, line, line_num, "dbg", 0, instruction.size() - 1);
-            for(auto i = 0; i < stack.size(); i++)
+            if(global_instruction.size() > 1) return WrongArity(file_name, global_line, global_line_num, "dbg", 0, global_instruction.size() - 1);
+            for(auto i = 0; i < global_stack.size(); i++)
             {
-                aux_dbg_stack = stack;
-                aux_dbg_elem = aux_dbg_stack.top(); aux_dbg_stack.pop();
-                std::cout << i << " | " << aux_dbg_elem << " |" << std::endl;
+                global_aux_dbg_stack = global_stack;
+                global_aux_dbg_elem = global_aux_dbg_stack.top(); global_aux_dbg_stack.pop();
+                std::cout << i << " | " << global_aux_dbg_elem << " |" << std::endl;
             }
             break;
         case INSTR::COMMENT:
@@ -430,7 +464,7 @@ STATUS interpret(const std::ifstream& file, const std::string& file_name, const 
         case INSTR::EMPTYLINE:
             continue;
        default:
-            return UndeclaredID(file_name, line, line_num, instruction[0]);
+            return UndeclaredID(file_name, global_line, global_line_num, global_instruction[0]);
        }
     }
     return STATUS::SUCCESS;
@@ -447,7 +481,7 @@ OPTIONS
 }
 STATUS version()
 {
-    time_t t = time(0);
+    time_t t = time(nullptr);
     std::cout << R"(SASM (Stack Assembly) language interpreter
 Version: 0.1.0-beta+test
 Author: Antoni Kiedos
@@ -473,14 +507,13 @@ int main(int argc, char** argv)
 {
     if(argc == 2)
     {
-        file_name = argv[1];
-        if(IsValidFile(file_name))
+        global_file_name = argv[1];
+        if(IsValidFile(global_file_name))
         {
-            std::ifstream infile(file_name);
-            //std::cout << "Interpreting file: " << file_name << std::endl; // LOG
-            return static_cast<int>(interpret(infile, file_name));
+            std::ifstream infile(global_file_name);
+            return static_cast<int>(interpret(infile, global_file_name));
         }
-        else return static_cast<int>(ExecuteCommand(file_name));
+        else return static_cast<int>(ExecuteCommand(global_file_name));
     }
     else if(argc > 2)
     {
