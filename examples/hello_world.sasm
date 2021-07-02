@@ -1,6 +1,7 @@
 load Hello
 printps
 ; Quotes aren't implemented and <space> terminates arguments (not only ',' terminates), so you have to write space character this way:
+; Er... you now can `load Hello World' normally, but without quotes
 load 32
 printpc
 ; Feature available in versions 0.1.0-beta+test and 0.1.0-beta+noverbose or higher: blank line

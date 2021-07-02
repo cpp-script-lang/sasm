@@ -16,4 +16,4 @@ Feel free to contact me via Discussions tab on GitHub or via e-mail if you are e
 In Discussions tab there always is also a discussion about latest release.
 
 # Known issues
-On GNU/Linux, `print*` commands doesn't work.
+On GNU/Linux, `print*` commands don't work.

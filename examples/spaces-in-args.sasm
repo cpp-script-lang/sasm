@@ -1,0 +1,5 @@
+; New feature: spaces in arguments (v0.3.0)
+load Hello World!
+printps
+load 10
+printpc
